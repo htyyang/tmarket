@@ -1,11 +1,10 @@
 import os
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
-from .scrape import scrape
+from scrape import scrape
 
 class Player(scrape):
     def __init__(self, **kwargs):
-            self,
             #core info
             self.core_info = {
                 'name': kwargs.get('name', None),
@@ -13,9 +12,9 @@ class Player(scrape):
                 'url': kwargs.get('url', None),
             }
             #basic data
-            self.basic_data = basic_data(self.core_info)
+            self.basic_data = basic_data(**self.core_info)
             #set up the driver
-            if driver is None:
+            if self.driver is None:
                 try:
                     if os.getenv("CHROMEDRIVER") is None:
                         expected_cache_path = os.path.join(os.path.dirname(__file__), "drivers")
@@ -29,23 +28,22 @@ class Player(scrape):
                     else:
                         driver_path = os.getenv("CHROMEDRIVER")
 
-                    driver = webdriver.Chrome(executable_path=driver_path)
+                    self.driver = webdriver.Chrome(executable_path=driver_path)
                 except:
                     # Fallback logic in case the above fails for any reason
-                    driver = webdriver.Chrome()
+                    self.driver = webdriver.Chrome()
             
             # Set up the driver
             if self.basic_data.url: #Directly by the url
-                driver.get(self.basic_data.url)
+                self.driver.get(self.basic_data.url)
             elif self.basic_data.id: #By ID
                 with open('../docs/URL.txt', 'r') as file:  # Get the parent domain
                     parent_domain = file.readline().strip()
                 if "www.transfermarkt" in parent_domain:
-                    driver.get(parent_domain + f"any/profil/spieler/{self.basic_data.id}")
+                    self.driver.get(parent_domain + f"any/profil/spieler/{self.basic_data.id}")
                 else:
-                     driver.get(f"https://www.transfermarkt.com/any/profil/spieler/{self.basic_data.id}")
-                 
-                 
+                     self.driver.get(f"https://www.transfermarkt.com/any/profil/spieler/{self.basic_data.id}")
+
 class basic_data:
     age = None
     agent_name = None
@@ -78,8 +76,12 @@ class basic_data:
     social_media = None
 
     def __init__(self, **kwargs):
-            self,
             #core info
-            self.name = kwargs.get('name', None),
-            self.id = kwargs.get('id', None),
-            self.url = kwargs.get('url', None),
+            self.name = kwargs.get('name', None)
+            self.id = kwargs.get('id', None)
+            self.url = kwargs.get('url', None)
+
+
+if __name__ == '__main__':
+     messi = Player(url = "https://www.transfermarkt.com/lionel-messi/profil/spieler/28003")
+     print(messi.driver.current_url)
