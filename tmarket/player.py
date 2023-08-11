@@ -86,7 +86,6 @@ class basic_data:
 
 if __name__ == '__main__':
     try:
-    # Your scraping logic
         messi = Player(url = "https://www.transfermarkt.com/lionel-messi/profil/spieler/28003")
         print(messi.driver.current_url)
     except Exception as e:
