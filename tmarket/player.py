@@ -9,7 +9,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
 # Local application/library specific imports
-from scrape import scrape
+from .scrape import scrape
 
 
 class Player(scrape):
