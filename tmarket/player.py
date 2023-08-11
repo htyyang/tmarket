@@ -1,6 +1,7 @@
 import os
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
 from scrape import scrape
 
 class Player(scrape):
@@ -27,8 +28,9 @@ class Player(scrape):
                         driver_path = ChromeDriverManager(cache_path=expected_cache_path).install()
                     else:
                         driver_path = os.getenv("CHROMEDRIVER")
-
-                    self.driver = webdriver.Chrome(executable_path=driver_path)
+                    options = Options()
+                    options.headless = True
+                    self.driver = webdriver.Chrome(executable_path=driver_path, options=options)
                 except:
                     # Fallback logic in case the above fails for any reason
                     self.driver = webdriver.Chrome()
@@ -83,5 +85,12 @@ class basic_data:
 
 
 if __name__ == '__main__':
-     messi = Player(url = "https://www.transfermarkt.com/lionel-messi/profil/spieler/28003")
-     print(messi.driver.current_url)
+    try:
+    # Your scraping logic
+        messi = Player(url = "https://www.transfermarkt.com/lionel-messi/profil/spieler/28003")
+        print(messi.driver.current_url)
+    except Exception as e:
+            print(f"Error: {e}")
+    finally:
+        messi.driver.quit()  # Ensure the WebDriver session is closed
+     
