@@ -12,7 +12,7 @@ class scrape:
     with open(file_path, 'r') as file:  # Get the parent domain
         parent_domain = file.readline().strip()
     file_path = os.path.join(current_directory, 'docs/USER_AGENT.txt')
-    with open('tmarket/docs/USER_AGENT.txt', 'r') as file:
+    with open(file_path, 'r') as file:
         user_agent = file.readline().strip()
 
 class error:
