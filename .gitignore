@@ -1,6 +1,9 @@
 # Environments
 .venv/
 
+# Test
+test_output/
+
 # Drivers
 tmarket/drivers
 
