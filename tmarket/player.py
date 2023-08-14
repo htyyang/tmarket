@@ -8,7 +8,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import NoSuchElementException, InvalidSelectorException
+from selenium.common.exceptions import NoSuchElementException, InvalidSelectorException, TimeoutException
 
 # Relative imports
 from .scrape import scrape
@@ -29,15 +29,15 @@ class Player(scrape):
                 'url': kwargs.get('url', None),
             }
             # Basic data
-            self.basic_data = basic_data(**self.core_info)
-
+            self.basic_data = _basic_data(**self.core_info)
+            self.transfer_history = []
             # Set up the chrome settings
             self._chrome_options.add_argument(f"user-agent={self.user_agent}")
             self._chrome_options.add_argument("--headless") # Do not pop up
 
             # Set up the driver
-            if self.driver is None:
-                self._start_driver()
+            
+            self._start_driver()
   
             # Feed the url
             if self.core_info['url']: # Directly by the url
@@ -65,24 +65,25 @@ class Player(scrape):
             
     # Start the driver
     def _start_driver(self):
-        try:
-            if os.getenv("CHROMEDRIVER") is None:
-                expected_cache_path = os.path.join(os.path.dirname(__file__), "drivers")
-                    # Ensure the 'drivers' directory exists
-                if not os.path.exists(expected_cache_path):
-                    os.makedirs(expected_cache_path)
-                    # Automatically download the necessary version of ChromeDriver to the specified cache path
-                driver_path = ChromeDriverManager(cache_path=expected_cache_path).install()
-            else:
-                driver_path = os.getenv("CHROMEDRIVER")
-            self.driver = webdriver.Chrome(executable_path=driver_path, options=self._chrome_options)
-        except:
-            # Fallback logic in case the above fails for any reason
-            self.driver = webdriver.Chrome(options=self._chrome_options)
+        if self.driver is None:
+            try:
+                if os.getenv("CHROMEDRIVER") is None:
+                    expected_cache_path = os.path.join(os.path.dirname(__file__), "drivers")
+                        # Ensure the 'drivers' directory exists
+                    if not os.path.exists(expected_cache_path):
+                        os.makedirs(expected_cache_path)
+                        # Automatically download the necessary version of ChromeDriver to the specified cache path
+                    driver_path = ChromeDriverManager(cache_path=expected_cache_path).install()
+                else:
+                    driver_path = os.getenv("CHROMEDRIVER")
+                self.driver = webdriver.Chrome(executable_path=driver_path, options=self._chrome_options)
+            except:
+                # Fallback logic in case the above fails for any reason
+                self.driver = webdriver.Chrome(options=self._chrome_options)
 
     # Check url
     def _check_url(self):
-        self.driver.implicitly_wait(self.WAIT_TIMEOUT)
+        self.driver.implicitly_wait(1)
         if self.driver.current_url == ("https://www.transfermarkt.com/spieler-statistik/wertvollstespieler/marktwertetop"):
             self.driver.quit()
             raise error.URLNavigationError("Error navigating by wrong URL")
@@ -90,21 +91,23 @@ class Player(scrape):
             self.driver.quit()
             raise error.URLNavigationError("Error navigating by wrong URL")
         try:
-            WebDriverWait(self.driver, self.WAIT_TIMEOUT).until(EC.presence_of_element_located((By.CLASS_NAME, "data-header")))
+            WebDriverWait(self.driver, 3).until(EC.presence_of_element_located((By.CLASS_NAME, "data-header")))
         except:
             self.driver.quit()
             raise error.URLNavigationError("Error navigating by wrong URL")
 
     # Scrape core info   
     def _scrape_core_info(self):
-        self.core_info['name'] = self.basic_data.name = self._safe_find_element(self.driver, "//h1[@class='data-header__headline-wrapper']//strong")
-        self.core_info['id'] = self.basic_data.id = self._safe_find_element(self.driver, "//div[@data-action='profil']", "data-id")
-        self.core_info['url'] = self.basic_data.url = self._safe_find_element(self.driver, "//a[@class='tm-subnav-item megamenu']", "href")
+        self.core_info['name'] = self.basic_data.name = self._safe_find_element(driver = self.driver, path = ".data-header__headline-wrapper strong", type = By.CSS_SELECTOR)
+        self.core_info['id'] = self.basic_data.id = self._safe_find_element(driver = self.driver, path = "div#subnavi[data-id]", attr = "data-id", type = By.CSS_SELECTOR)
+        self.core_info['url'] = self.basic_data.url = self._safe_find_element(driver = self.driver, path = "//a[@class='tm-subnav-item megamenu']", attr = "href")
 
     # SCrape basic data
     def _scrape_basic_data(self):
         self.basic_data.image_url = self._safe_find_element(self.driver, "//div[@id='fotoauswahlOeffnen']//img", "src")
-        self.basic_data.jersey_number = self._safe_find_element(self.driver, "//span[@class='data-header__shirt-number']")
+        #fastest
+        self.basic_data.jersey_number = self._safe_find_element(driver = self.driver, path = "data-header__shirt-number", type = By.CLASS_NAME)
+
         self.basic_data.current_club_name = self._safe_find_element(self.driver, "//span[contains(text(), 'Current club:')]/following-sibling::span[1]//a[2]", "textContent")
         self.basic_data.current_club_url = self._safe_find_element(self.driver, "//span[@class='data-header__club']//a", "href")
         self.basic_data.current_club_joined = self._safe_find_element(self.driver, "//span[text()='Joined: ']//span", "textContent")
@@ -114,10 +117,7 @@ class Player(scrape):
         self.basic_data.retired_since_date = self._safe_find_element(self.driver, "//span[contains(text(),'Retired since:')]//span", "textContent")
         self.basic_data.current_club_contract_expires = self._safe_find_element(self.driver, "//span[text()='Contract expires: ']//span")
 
-        try:
-            self.basic_data.current_club_contract_option = self._safe_find_element(self.driver, "//span[contains(text(),'Contract option:')]//following::span[1]", "textContent")
-        except AttributeError:
-            self.basic_data.current_club_contract_option = None
+        self.basic_data.current_club_contract_option = self._safe_find_element(self.driver, "//span[contains(text(),'Contract option:')]//following::span[1]", "textContent")
 
         self.basic_data.name_in_home_country = self._safe_find_element(self.driver, "//span[text()='Name in home country:']//following::span[1]", "textContent")
 
@@ -136,15 +136,25 @@ class Player(scrape):
         citizenship_element_content = self._safe_find_element(self.driver, "//span[contains(text(), 'Citizenship:')]/following-sibling::span[1]", "textContent")
         split_data = [] if citizenship_element_content is None else citizenship_element_content.split()
         self.basic_data.citizenship = tuple(filter(None, split_data))
+        del split_data, citizenship_element_content
         
            
 
         self.basic_data.position = self._safe_find_element(self.driver, "//span[text()='Position:']//following::span[1]", "textContent")
-        self.basic_data.position_main = self._safe_find_element(self.driver, "//dt[contains(text(),'Main position:')]//following::dd[1]", "textContent")
-        self.basic_data.position_other = self._safe_find_element(self.driver, "//dt[contains(text(),'Other position:')]//following::dd", "textContent")
+
+        self.basic_data.position_main = self._safe_find_element(driver = self.driver, path = "detail-position__position", attr = "textContent", type = By.CLASS_NAME)
+        self.basic_data.position_other = self._safe_find_element(driver = self.driver, path = "//dt[contains(text(),'Other position:')]//following::dd", attr = "textContent")
+        another_position_other = self._safe_find_element(driver = self.driver, path = "//dt[contains(text(),'Other position:')]//following::dd[2]", attr = "textContent")
+
+        if (self.basic_data.position_other and another_position_other) :
+            self.basic_data.position_other = tuple((self.basic_data.position_other, another_position_other))
+        del another_position_other
+
         self.basic_data.dominant_foot = self._safe_find_element(self.driver, "//span[text()='Foot:']//following::span[1]", "textContent")
-        self.basic_data.market_value_current = self._safe_find_element(self.driver, "//div[@class='tm-player-market-value-development__current-value']", "textContent")
-        self.basic_data.market_value_max = self._safe_find_element(self.driver, "//div[@class='tm-player-market-value-development__max-value']", "textContent")
+
+        self.basic_data.market_value_current = self._safe_find_element(driver = self.driver, path = "tm-player-market-value-development__current-value", attr = "textContent", type = By.CLASS_NAME)
+        self.basic_data.market_value_max = self._safe_find_element(driver = self.driver, path = 'tm-player-market-value-development__max-value', attr = "textContent", type = By.CLASS_NAME)
+
         self.basic_data.agent_name = self._safe_find_element(self.driver, "//span[text()='Player agent:']//following::span[1]//a", "textContent")
         self.basic_data.agent_url = self._safe_find_element(self.driver, "//span[text()='Player agent:']//following::span[1]//a", "href")
 
@@ -153,21 +163,26 @@ class Player(scrape):
      
         self.basic_data.outfitter = self._safe_find_element(self.driver, "//span[contains(text(),'Outfitter:')]//following::span[1]", "textContent")
 
-        
+        try:
+            social_media_elements = WebDriverWait(self.driver, 0.1).until(EC.presence_of_element_located((By.XPATH, "//div[@class='socialmedia-icons']")))
+            self.basic_data.social_media_links = tuple(href.get_attribute('href') for href in social_media_elements.find_elements(By.XPATH, ".//a[@href]"))
+        except: 
+            self.basic_data.social_media_links = None
         # For 'social_media', assuming it might return multiple links
-        self.social_media_links = self._safe_find_element(self.driver, "//div[@class='socialmedia-icons']", "href")
+        
 
         if self.basic_data.jersey_number:
             self.basic_data.jersey_number = self.basic_data.jersey_number.strip("#")
 
     # Get the info by xpath
-    def _safe_find_element(self, driver, xpath, attr=None):
+    def _safe_find_element(self, driver, path, attr=None, type=By.XPATH):
         """Returns the element's attribute or text safely. If element isn't found, return None."""
         try:
-            element = driver.find_element(By.XPATH, xpath)
+            element = WebDriverWait(driver, 0.1).until(EC.presence_of_element_located((type, path)))
+
             if attr == "textContent":
                 try:
-                    text = element.get_attribute("textContent").strip().capitalize()
+                    text = element.get_attribute("textContent").strip()
                     if text in ["N/a", "N/A", "n/a"]:
                         return None
                     return text
@@ -177,29 +192,63 @@ class Player(scrape):
             if text_value in ["N/a", "N/A", "n/a"]:
                 return None
             return text_value
-
+        except TimeoutException:
+            return None
         except NoSuchElementException:
             return None
         except InvalidSelectorException:
             return None
 
-    def get_core_info_dict(self):
-            return self.core_info
-
-    def get_core_info_df(self):
-        return pd.DataFrame([self.core_info])
-        
-    def get_basic_data_dict(self):
-         return self.basic_data.to_dict()
+    def get_core_info(self, df=False):
+        if df:
+            return pd.DataFrame([self.core_info])
+        return self.core_info
+  
+    def get_basic_data(self, df=False, drop_na=False):
+         if df:
+            if drop_na:
+                return pd.DataFrame([self.basic_data._to_dict()]).dropna(axis=1, how='all')
+            return pd.DataFrame([self.basic_data._to_dict()])
+         return self.basic_data._to_dict()
     
-    def get_basic_data_df(self):
-        return pd.DataFrame([self.basic_data.to_dict()])
+    def _scrape_transfer_history(self):
+        self._start_driver()
+        self.driver.get(self.core_info['url'])
+        try:
+            all_history = WebDriverWait(self.driver, 2).until(EC.presence_of_all_elements_located((By.CLASS_NAME, 'tm-player-transfer-history-grid')))
+            all_history = all_history[1:-1]
+        except:
+            return None
         
-    def get_basic_data_df_available(self):
-        return pd.DataFrame([self.basic_data.to_dict()]).dropna(axis=1, how='all')
+        for one_history in all_history:
+            #print(one_history.get_attribute('outerHTML'))
+            history = _transfer_history()
+            history.season = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__season')
+            history.transfer_date = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__date')
+
+            history.left = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__old-club', 'tm-player-transfer-history-grid__club-link')
+            history.joined = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__new-club', 'tm-player-transfer-history-grid__club-link')
+            #history.left = self._safe_find_element(driver = one_history, path = 'grid__cell grid__cell--center tm-player-transfer-history-grid__old-club', attr = "textContent", type = By.CLASS_NAME)
+            #history.joined = self._safe_find_element(one_history, './/div[contains(@class, "tm-player-transfer-history-grid__new-club")]//a[contains(@class, "tm-player-transfer-history-grid__club-link")]', "textContent")
             
-# Class of basic data
-class basic_data:
+            history.market_value = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__market-value')
+            history.fee = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__fee')
+
+            self.transfer_history.append(history)
+        self.driver.quit()
+        self.driver = None
+
+    def get_transfer_history(self, to_dict=False):
+        if not self.transfer_history:
+            self._scrape_transfer_history()
+        if to_dict:
+            history_dict_list = []
+            for history in self.transfer_history:
+                history_dict_list.append(history._to_dict())
+            return history_dict_list
+        return self.transfer_history
+    
+class _basic_data:
     age = None
     agent_name = None
     agent_url = None
@@ -228,29 +277,62 @@ class basic_data:
     position_other = None
     retired_since_date = None
     jersey_number = None
-    social_media = None
+    social_media_links = None
 
     def __init__(self, **kwargs):
             self.name = kwargs.get('name', None)
             self.id = kwargs.get('id', None)
             self.url = kwargs.get('url', None)
 
-    def to_dict(self):
+    def _to_dict(self):
         return {attr: getattr(self, attr) for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")}
+
+class _transfer_history:
+    season = None
+    transfer_date = None
+    left = None
+    joined = None
+    market_value = None
+    fee = None
+
+    def __str__(self):
+        return f"season:{self.season}\ntransfer date:{self.transfer_date}\nleft from:{self.left}\njoined:{self.joined}\nmarket value:{self.market_value}\nfee:{self.fee}"
+        
+    def _to_dict(self):
+        return {attr: getattr(self, attr) for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")}
+    
+    def _extract_history_data(element, class_name1, class_name2 = None):
+        try:
+            if class_name2:
+                return element.find_element(By.CLASS_NAME, class_name1)\
+                            .find_element(By.CLASS_NAME, class_name2)\
+                            .get_attribute('textContent').strip()
+            else:
+                return element.find_element(By.CLASS_NAME, class_name1).get_attribute('textContent').strip()
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            return None
+    
 
 # Temp test entrance    
 if __name__ == '__main__':
     try:
-        messi = Player(id = 201)
-        print(messi.get_core_info_df())
-        print(messi.get_core_info_dict())
-        print(messi.get_basic_data_df_available())
-        print(messi.basic_data.citizenship)
-        print(messi.basic_data.height)
-        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-        csv_file = os.path.join(desktop_path, "tmarket_output.csv")
-        messi.get_basic_data_df_available().to_csv(csv_file, index=False)
-        
+        messi = Player(url = "https://www.transfermarkt.com/lionel-messi/profil/spieler/28003")
+        print(messi.get_core_info(True))
+        print(messi.get_core_info())
+        print(messi.get_basic_data(True,True))
+        #print(messi.basic_data.image_url)
+        #print(messi.basic_data.position_other)
+        #desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        #csv_file = os.path.join(desktop_path, "tmarket_output.csv")
+        #messi.get_basic_data_df_available().to_csv(csv_file, index=False)
+        for i in messi.get_transfer_history(True):
+            print(i) 
+        for i in messi.get_transfer_history():
+            print(i) 
+        #print(messi.get_transfer_history()[0].left)
     except Exception as e:
             print(f"Error: {e}")
+    finally:
+        messi.driver.quit()
     
