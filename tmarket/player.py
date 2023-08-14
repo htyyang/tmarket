@@ -21,7 +21,7 @@ class Player(scrape):
             
             # Inherit
             super().__init__()
-
+            
             # Core info
             self.core_info = {
                 'name': kwargs.get('name', None),
