@@ -19,7 +19,8 @@ from .scrape import error
 
 
 class Player(scrape):
-    
+    transfer_history = []
+    all_seasons_stats_compact = []
     def __init__(self, **kwargs):
             # Inherit
             super().__init__()
@@ -31,7 +32,6 @@ class Player(scrape):
             }
             # Basic data
             self.basic_data = _basic_data(**self.core_info)
-            self.transfer_history = []
             # Set up the chrome settings
             self._chrome_options.add_argument(f"user-agent={self.user_agent}")
             self._chrome_options.add_argument("--headless") # Do not pop up
@@ -310,7 +310,24 @@ class _transfer_history:
         except Exception as e:
             print(f"Error occurred: {e}")
             return None
-    
+
+class _all_seasons_stats_compact:
+    season = None
+    competetion = None
+    club = None
+    game_num = None
+    goal = None
+    penalty = None
+    cards = None
+    minutes = None
+    def _provide_url_by_main_url(self, url):
+        parts = url.split('/')
+        # Check if the URL is in the expected format
+        if len(parts) < 5 or parts[-3] != "profil":
+            raise ValueError("URL not in the expected format!")
+        parts[-3] = "leistungsdatendetails"
+        # Join the parts back together
+        return '/'.join(parts)
 
 # Temp test entrance    
 if __name__ == '__main__':
@@ -334,6 +351,8 @@ if __name__ == '__main__':
         print("--- %s seconds ---" % (time.time() - start_time))
         #print(messi.get_transfer_history()[0].left)
         print(messi.basic_data.status)
+        a = _all_seasons_stats_compact()
+        print(a._provide_url_by_main_url(url=messi.basic_data.url))
     except Exception as e:
             print(f"Error: {e}")
     finally:
