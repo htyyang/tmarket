@@ -1,5 +1,5 @@
 # Standard library imports
-import os
+import time
 
 # Third-party library imports
 import pandas as pd
@@ -7,21 +7,22 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchElementException, InvalidSelectorException, TimeoutException
+
 
 # Relative imports
 from .scrape import scrape
 from .scrape import error
 
 
+
 class Player(scrape):
     
     def __init__(self, **kwargs):
-            
             # Inherit
             super().__init__()
-            
             # Core info
             self.core_info = {
                 'name': kwargs.get('name', None),
@@ -34,11 +35,13 @@ class Player(scrape):
             # Set up the chrome settings
             self._chrome_options.add_argument(f"user-agent={self.user_agent}")
             self._chrome_options.add_argument("--headless") # Do not pop up
-
+            image_block = {"profile.managed_default_content_settings.images": 2}
+            js_block = {"profile.managed_default_content_settings.javascript": 2}
+            self._chrome_options.add_experimental_option("prefs", image_block)
+            self._chrome_options.add_experimental_option("prefs", js_block)
+            del js_block, image_block
             # Set up the driver
-            
             self._start_driver()
-  
             # Feed the url
             if self.core_info['url']: # Directly by the url
                 self.driver.get(self.core_info['url'])
@@ -47,18 +50,14 @@ class Player(scrape):
                     self.driver.get(self.parent_domain + "any/profil/spieler/" + str(self.core_info['id']))
                 else:
                     self.driver.get("https://www.transfermarkt.com/any/profil/spieler/" + str(self.core_info['id']))
-
-            # Check url
             try:
                 self._check_url()
             except error.URLNavigationError as e:
                 print(e)
                 exit(1)
-
-            # Default scraping content
+            #default scraping
             self._scrape_core_info()
             self._scrape_basic_data()
-
             # Quit the driver
             self.driver.quit()
             self.driver = None
@@ -67,32 +66,30 @@ class Player(scrape):
     def _start_driver(self):
         if self.driver is None:
             try:
-                if os.getenv("CHROMEDRIVER") is None:
-                    expected_cache_path = os.path.join(os.path.dirname(__file__), "drivers")
-                        # Ensure the 'drivers' directory exists
-                    if not os.path.exists(expected_cache_path):
-                        os.makedirs(expected_cache_path)
-                        # Automatically download the necessary version of ChromeDriver to the specified cache path
-                    driver_path = ChromeDriverManager(cache_path=expected_cache_path).install()
-                else:
-                    driver_path = os.getenv("CHROMEDRIVER")
-                self.driver = webdriver.Chrome(executable_path=driver_path, options=self._chrome_options)
-            except:
-                # Fallback logic in case the above fails for any reason
                 self.driver = webdriver.Chrome(options=self._chrome_options)
-
+            except:
+                self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=self._chrome_options)
+                # Fallback logic in case the above fails for any reason
+                
     # Check url
     def _check_url(self):
-        self.driver.implicitly_wait(1)
-        if self.driver.current_url == ("https://www.transfermarkt.com/spieler-statistik/wertvollstespieler/marktwertetop"):
-            self.driver.quit()
-            raise error.URLNavigationError("Error navigating by wrong URL")
-        elif not self.driver.current_url.startswith("https://www.transfermarkt.com/"):
-            self.driver.quit()
-            raise error.URLNavigationError("Error navigating by wrong URL")
         try:
             WebDriverWait(self.driver, 3).until(EC.presence_of_element_located((By.CLASS_NAME, "data-header")))
+            return
         except:
+            if self.driver.current_url == ("https://www.transfermarkt.com/spieler-statistik/wertvollstespieler/marktwertetop"):
+                self.driver.quit()
+                raise error.URLNavigationError("Error navigating by wrong URL")
+            elif not self.driver.current_url.startswith("https://www.transfermarkt.com/"):
+                self.driver.quit()
+                raise error.URLNavigationError("Error navigating by wrong URL")
+            else: 
+                self.driver.implicitly_wait(1)
+                try:
+                    WebDriverWait(self.driver, 3).until(EC.presence_of_element_located((By.CLASS_NAME, "data-header")))
+                    return
+                except:
+                    pass
             self.driver.quit()
             raise error.URLNavigationError("Error navigating by wrong URL")
 
@@ -104,35 +101,45 @@ class Player(scrape):
 
     # SCrape basic data
     def _scrape_basic_data(self):
+
+        self.basic_data.status = self._safe_find_element(self.driver, path = "data-header__club", attr="textContent", type = By.CLASS_NAME)
+        if self.basic_data.status != "Retired":
+            self.basic_data.status = "Active"
+
         self.basic_data.image_url = self._safe_find_element(self.driver, "//div[@id='fotoauswahlOeffnen']//img", "src")
-        #fastest
-        self.basic_data.jersey_number = self._safe_find_element(driver = self.driver, path = "data-header__shirt-number", type = By.CLASS_NAME)
-
-        self.basic_data.current_club_name = self._safe_find_element(self.driver, "//span[contains(text(), 'Current club:')]/following-sibling::span[1]//a[2]", "textContent")
-        self.basic_data.current_club_url = self._safe_find_element(self.driver, "//span[@class='data-header__club']//a", "href")
         self.basic_data.current_club_joined = self._safe_find_element(self.driver, "//span[text()='Joined: ']//span", "textContent")
-        self.basic_data.last_club_name = self._safe_find_element(self.driver, "//span[contains(text(),'Last club:')]//span//a", "title")
-        self.basic_data.last_club_url = self._safe_find_element(self.driver, "//span[contains(text(),'Last club:')]//span//a", "href")
-        self.basic_data.most_games_for_club_name = self._safe_find_element(self.driver, "//span[contains(text(),'Most games for:')]//span//a")
-        self.basic_data.retired_since_date = self._safe_find_element(self.driver, "//span[contains(text(),'Retired since:')]//span", "textContent")
-        self.basic_data.current_club_contract_expires = self._safe_find_element(self.driver, "//span[text()='Contract expires: ']//span")
-
-        self.basic_data.current_club_contract_option = self._safe_find_element(self.driver, "//span[contains(text(),'Contract option:')]//following::span[1]", "textContent")
-
-        self.basic_data.name_in_home_country = self._safe_find_element(self.driver, "//span[text()='Name in home country:']//following::span[1]", "textContent")
+        if self.basic_data.status == "Retired":
+            self.basic_data.last_club_name = self._safe_find_element(self.driver, "//span[contains(text(),'Last club:')]//span//a", "title")
+            self.basic_data.last_club_url = self._safe_find_element(self.driver, "//span[contains(text(),'Last club:')]//span//a", "href")
+            self.basic_data.most_games_for_club_name = self._safe_find_element(self.driver, "//span[contains(text(),'Most games for:')]//span//a")
+            self.basic_data.retired_since_date = self._safe_find_element(self.driver, "//span[contains(text(),'Retired since:')]//span", "textContent")
+        else:
+            self.basic_data.jersey_number = self._safe_find_element(driver = self.driver, path = "data-header__shirt-number", type = By.CLASS_NAME)
+            if self.basic_data.jersey_number:
+                try:
+                    self.basic_data.jersey_number = self.basic_data.jersey_number.strip("#")
+                except: 
+                    pass
+            self.basic_data.current_club_name = self._safe_find_element(self.driver, "//span[@class='data-header__club']//a", "title")
+            self.basic_data.current_club_url = self._safe_find_element(self.driver, "//span[@class='data-header__club']//a", "href")
+            self.basic_data.market_value_current = self._safe_find_element(driver = self.driver, path = "tm-player-market-value-development__current-value", attr = "textContent", type = By.CLASS_NAME)
+            self.basic_data.current_club_contract_expires = self._safe_find_element(self.driver, "//span[text()='Contract expires: ']//span")
+       
+        #self.basic_data.current_club_contract_option = self._safe_find_element(self.driver, "//span[contains(text(),'Contract option:')]//following::span[1]", "textContent")
+        #self.basic_data.name_in_home_country = self._safe_find_element(self.driver, "//span[text()='Name in home country:']//following::span[1]", "textContent")
 
         self.basic_data.full_name = self._safe_find_element(self.driver, "//span[text()='Full name:']//following::span[1]", "textContent")
         self.basic_data.DOB = self._safe_find_element(self.driver, "//span[text()='Date of birth:']//following::span[1]//a", "textContent")
+
         self.basic_data.place_of_birth_city = self._safe_find_element(self.driver, "//span[text()='Place of birth:']//following::span[1]//span", "textContent")
         self.basic_data.place_of_birth_country = self._safe_find_element(self.driver, "//span[text()='Place of birth:']//following::span[1]//span//img", "title")
-
+        
         
         self.basic_data.age = self._safe_find_element(self.driver, "//span[text()='Age:']//following::span[1]", "textContent")
         
         
-        
         self.basic_data.height = self._safe_find_element(self.driver, "//span[text()='Height:']//following::span[1]", "textContent")
-
+      
         citizenship_element_content = self._safe_find_element(self.driver, "//span[contains(text(), 'Citizenship:')]/following-sibling::span[1]", "textContent")
         split_data = [] if citizenship_element_content is None else citizenship_element_content.split()
         self.basic_data.citizenship = tuple(filter(None, split_data))
@@ -152,11 +159,11 @@ class Player(scrape):
 
         self.basic_data.dominant_foot = self._safe_find_element(self.driver, "//span[text()='Foot:']//following::span[1]", "textContent")
 
-        self.basic_data.market_value_current = self._safe_find_element(driver = self.driver, path = "tm-player-market-value-development__current-value", attr = "textContent", type = By.CLASS_NAME)
+        
         self.basic_data.market_value_max = self._safe_find_element(driver = self.driver, path = 'tm-player-market-value-development__max-value', attr = "textContent", type = By.CLASS_NAME)
 
-        self.basic_data.agent_name = self._safe_find_element(self.driver, "//span[text()='Player agent:']//following::span[1]//a", "textContent")
-        self.basic_data.agent_url = self._safe_find_element(self.driver, "//span[text()='Player agent:']//following::span[1]//a", "href")
+        #self.basic_data.agent_name = self._safe_find_element(self.driver, "//span[text()='Player agent:']//following::span[1]//a", "textContent")
+        #self.basic_data.agent_url = self._safe_find_element(self.driver, "//span[text()='Player agent:']//following::span[1]//a", "href")
 
         
 
@@ -169,12 +176,8 @@ class Player(scrape):
         except: 
             self.basic_data.social_media_links = None
         # For 'social_media', assuming it might return multiple links
-        
-
-        if self.basic_data.jersey_number:
-            self.basic_data.jersey_number = self.basic_data.jersey_number.strip("#")
-
-    # Get the info by xpath
+          
+    # Get the info 
     def _safe_find_element(self, driver, path, attr=None, type=By.XPATH):
         """Returns the element's attribute or text safely. If element isn't found, return None."""
         try:
@@ -221,19 +224,13 @@ class Player(scrape):
             return None
         
         for one_history in all_history:
-            #print(one_history.get_attribute('outerHTML'))
             history = _transfer_history()
             history.season = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__season')
             history.transfer_date = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__date')
-
             history.left = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__old-club', 'tm-player-transfer-history-grid__club-link')
             history.joined = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__new-club', 'tm-player-transfer-history-grid__club-link')
-            #history.left = self._safe_find_element(driver = one_history, path = 'grid__cell grid__cell--center tm-player-transfer-history-grid__old-club', attr = "textContent", type = By.CLASS_NAME)
-            #history.joined = self._safe_find_element(one_history, './/div[contains(@class, "tm-player-transfer-history-grid__new-club")]//a[contains(@class, "tm-player-transfer-history-grid__club-link")]', "textContent")
-            
             history.market_value = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__market-value')
             history.fee = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__fee')
-
             self.transfer_history.append(history)
         self.driver.quit()
         self.driver = None
@@ -278,6 +275,7 @@ class _basic_data:
     retired_since_date = None
     jersey_number = None
     social_media_links = None
+    status = None
 
     def __init__(self, **kwargs):
             self.name = kwargs.get('name', None)
@@ -316,8 +314,9 @@ class _transfer_history:
 
 # Temp test entrance    
 if __name__ == '__main__':
+   
     try:
-        messi = Player(url = "https://www.transfermarkt.com/lionel-messi/profil/spieler/28003")
+        messi = Player(url = "https://www.transfermarkt.com/owen-hargreaves/profil/spieler/201")
         print(messi.get_core_info(True))
         print(messi.get_core_info())
         print(messi.get_basic_data(True,True))
@@ -326,13 +325,20 @@ if __name__ == '__main__':
         #desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
         #csv_file = os.path.join(desktop_path, "tmarket_output.csv")
         #messi.get_basic_data_df_available().to_csv(csv_file, index=False)
+        start_time = time.time()
         for i in messi.get_transfer_history(True):
             print(i) 
+        print("--- %s seconds ---" % (time.time() - start_time))
         for i in messi.get_transfer_history():
             print(i) 
+        print("--- %s seconds ---" % (time.time() - start_time))
         #print(messi.get_transfer_history()[0].left)
+        print(messi.basic_data.status)
     except Exception as e:
             print(f"Error: {e}")
     finally:
-        messi.driver.quit()
+        try:
+            messi.driver.quit()
+        except: pass
+    
     
