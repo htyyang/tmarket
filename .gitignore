@@ -3,7 +3,9 @@
 
 # Test
 test_output/
+test_out.py
 
+test
 # Drivers
 tmarket/drivers
 
