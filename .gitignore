@@ -9,6 +9,9 @@ test
 # Drivers
 tmarket/drivers
 
+# logger
+tmarket/docs/tmarket.log
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
