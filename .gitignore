@@ -2,7 +2,7 @@
 .venv/
 
 # Test
-test_output/
+tests/
 test_out.py
 
 test
