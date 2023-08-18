@@ -27,6 +27,6 @@ setup(
     url = 'https://github.com/htyyang/tmarket', 
     download_url = 'https://github.com/htyyang/tmarket/dist/' + version + '.tar.gz', 
     keywords = ['soccer', 'data', 'scraper'],
-    classifiers = [], 
+    classifiers = ['Development Status :: 3 - Alpha',], 
     install_requires=[package.split("\n")[0] for package in open("requirements.txt", "r").readlines()]
 )
