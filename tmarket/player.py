@@ -52,6 +52,22 @@ class Player(scrape):
                     self.driver.get(self.parent_domain + "any/profil/spieler/" + str(self.core_info['id']))
                 else:
                     self.driver.get("https://www.transfermarkt.com/any/profil/spieler/" + str(self.core_info['id']))
+
+
+            elif self.core_info['name']:
+                try:
+                    self.driver.get(self.parent_domain + "schnellsuche/ergebnis/schnellsuche?query=" + str(self.core_info['name']).replace(' ', '+'))
+                    if "Search results for players" in self._safe_find_element(driver = self.driver, path = "content-box-headline", attr="textContent", type=By.CLASS_NAME):
+                        print("got")
+                        self.driver.get(self._safe_find_element(driver=self.driver, path="hauptlink", attr="href", type=By.CLASS_NAME, path_2="a",type_2=By.TAG_NAME))
+
+
+
+                except:
+                    print("not found")
+                    exit("1")
+
+
             try:
                 self._check_url()
             except error.URLNavigationError as e:
@@ -181,11 +197,12 @@ class Player(scrape):
         # For 'social_media', assuming it might return multiple links
           
     # Get the info 
-    def _safe_find_element(self, driver, path, attr=None, type=By.XPATH):
+    def _safe_find_element(self, driver, path, attr=None, type=By.XPATH, path_2 = None, type_2=By.XPATH):
         """Returns the element's attribute or text safely. If element isn't found, return None."""
         try:
             element = WebDriverWait(driver, 0.1).until(EC.presence_of_element_located((type, path)))
-
+            if path_2:
+                element = element.find_element(type_2,path_2)
             if attr == "textContent":
                 try:
                     text = element.get_attribute("textContent").strip()
@@ -336,7 +353,7 @@ class _all_seasons_stats_compact:
 if __name__ == '__main__':
    
     try:
-        messi = Player(url = "https://www.transfermarkt.com/owen-hargreaves/profil/spieler/201")
+        messi = Player(name = "cristiano ronaldo")
         print(messi.get_core_info(True))
         print(messi.get_core_info())
         print(messi.get_basic_data(True,True))
