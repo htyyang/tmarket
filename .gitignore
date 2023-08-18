@@ -1,6 +1,6 @@
 # Environments
 .venv/
-
+.DS_Store
 # Test
 tests/
 test_out.py

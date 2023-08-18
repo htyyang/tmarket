@@ -360,6 +360,7 @@ if __name__ == '__main__':
             print(f"Error: {e}")
     finally:
         try:
+            messi._save_log_copy("/Users/haotianyang/desktop")
             messi.driver.quit()
         except: pass
     

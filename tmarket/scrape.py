@@ -49,6 +49,7 @@ class scrape:
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs/tmarket.log'),'w') as log_file:
             pass
     def _save_log_copy(self,save_path):
+        save_path = os.path.join(save_path,"logger.log")
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs/tmarket.log'), 'r') as original:
             content = original.read()
         with open(save_path, 'w') as save:
