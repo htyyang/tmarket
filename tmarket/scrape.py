@@ -45,6 +45,14 @@ class scrape:
     def get_current_parent_domain(self):
         return self.parent_domain
 
+    def _clear_log_file(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs/tmarket.log'),'w') as log_file:
+            pass
+    def _save_log_copy(self,save_path):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs/tmarket.log'), 'r') as original:
+            content = original.read()
+        with open(save_path, 'w') as save:
+            save.write(content)
 
 
 class error:

@@ -15,14 +15,16 @@ from selenium.common.exceptions import NoSuchElementException, InvalidSelectorEx
 # Relative imports
 from .scrape import scrape
 from .scrape import error
-
+from .logger_config import get_logger
 
 
 class Player(scrape):
+    logger = get_logger(__name__)
     transfer_history = []
     all_seasons_stats_compact = []
     def __init__(self, **kwargs):
             # Inherit
+            self.logger.info("Create player object")
             super().__init__()
             # Core info
             self.core_info = {
@@ -60,6 +62,7 @@ class Player(scrape):
             self._scrape_basic_data()
             # Quit the driver
             self.driver.quit()
+            self.logger.info("Player object's initial driver quit")
             self.driver = None
             
     # Start the driver
