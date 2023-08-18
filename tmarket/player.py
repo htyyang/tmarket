@@ -1,6 +1,6 @@
 # Standard library imports
 import time
-
+import re
 # Third-party library imports
 import pandas as pd
 from selenium import webdriver
@@ -56,7 +56,7 @@ class Player(scrape):
 
             elif self.core_info['name']:
                 try:
-                    self.driver.get(self.parent_domain + "schnellsuche/ergebnis/schnellsuche?query=" + str(self.core_info['name']).replace(' ', '+'))
+                    self.driver.get(self.parent_domain + "schnellsuche/ergebnis/schnellsuche?query=" + re.sub(r'\s+', '+', str(self.core_info['name'])))
                     if "Search results for players" in self._safe_find_element(driver = self.driver, path = "content-box-headline", attr="textContent", type=By.CLASS_NAME):
                         print("got")
                         self.driver.get(self._safe_find_element(driver=self.driver, path="hauptlink", attr="href", type=By.CLASS_NAME, path_2="a",type_2=By.TAG_NAME))
@@ -353,7 +353,7 @@ class _all_seasons_stats_compact:
 if __name__ == '__main__':
    
     try:
-        messi = Player(name = "cristiano ronaldo")
+        messi = Player(name = "DALEI       WANG")
         print(messi.get_core_info(True))
         print(messi.get_core_info())
         print(messi.get_basic_data(True,True))
