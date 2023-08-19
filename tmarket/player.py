@@ -14,7 +14,7 @@ from selenium.common.exceptions import NoSuchElementException, InvalidSelectorEx
 
 # Relative imports
 from .scrape import scrape
-from .scrape import error
+from .error import error
 from .logger_config import get_logger
 
 
