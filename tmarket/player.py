@@ -15,7 +15,7 @@ from selenium.common.exceptions import NoSuchElementException, InvalidSelectorEx
 # Relative imports
 from .scrape import scrape
 from .error import error
-from .logger_config import get_logger
+from .logger_config import get_logger, clear_log_file
 
 
 class Player(scrape):
@@ -52,33 +52,33 @@ class Player(scrape):
                     self.driver.get(self.parent_domain + "any/profil/spieler/" + str(self.core_info['id']))
                 else:
                     self.driver.get("https://www.transfermarkt.com/any/profil/spieler/" + str(self.core_info['id']))
-
-
             elif self.core_info['name']:
                 try:
                     self.driver.get(self.parent_domain + "schnellsuche/ergebnis/schnellsuche?query=" + re.sub(r'\s+', '+', str(self.core_info['name'])))
                     if "Search results for players" in self._safe_find_element(driver = self.driver, path = "content-box-headline", attr="textContent", type=By.CLASS_NAME):
-                        print("got")
                         self.driver.get(self._safe_find_element(driver=self.driver, path="hauptlink", attr="href", type=By.CLASS_NAME, path_2="a",type_2=By.TAG_NAME))
-
-
-
-                except:
-                    print("not found")
+                    else:
+                        self.logger.error(f"Cannot find player's profile: {error.URLNavigationError(e)}")
+                        self.logger.critical("The process failed to continue")
+                        exit("1")
+                except Exception as e:
+                    self.logger.error(f"Cannot find player's profile: {error.URLNavigationError(e)}")
+                    self.logger.critical("The process failed to continue")
                     exit("1")
-
-
+            self.logger.info("Get player's profile url")
             try:
                 self._check_url()
             except error.URLNavigationError as e:
-                print(e)
+                self.logger.critical(f"The process failed to continue: {e}")
                 exit(1)
             #default scraping
             self._scrape_core_info()
+            
             self._scrape_basic_data()
+            
             # Quit the driver
             self.driver.quit()
-            self.logger.info("Player object's initial driver quit")
+            self.logger.info("Quit player object's initial driver ")
             self.driver = None
             
     # Start the driver
@@ -86,38 +86,45 @@ class Player(scrape):
         if self.driver is None:
             try:
                 self.driver = webdriver.Chrome(options=self._chrome_options)
-            except:
+                self.logger.info("Start driver")
+            except Exception as e:
                 self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=self._chrome_options)
+                self.logger.info(f"Install chrome driver and then start due to: {e}")
                 # Fallback logic in case the above fails for any reason
                 
     # Check url
     def _check_url(self):
         try:
             WebDriverWait(self.driver, 3).until(EC.presence_of_element_located((By.CLASS_NAME, "data-header")))
+            self.logger.info("Correct profile url")
             return
-        except:
+        except Exception as e:
             if self.driver.current_url == ("https://www.transfermarkt.com/spieler-statistik/wertvollstespieler/marktwertetop"):
                 self.driver.quit()
-                raise error.URLNavigationError("Error navigating by wrong URL")
+                self.logger.exception(f"Error navigating by wrong URL: {e}")
+                raise error.URLNavigationError(f"Error navigating by wrong URL: {e}")
             elif not self.driver.current_url.startswith("https://www.transfermarkt.com/"):
                 self.driver.quit()
-                raise error.URLNavigationError("Error navigating by wrong URL")
+                self.logger.exception(f"Error navigating by wrong URL: {e}")
+                raise error.URLNavigationError(f"Error navigating by wrong URL: {e}")
             else: 
                 self.driver.implicitly_wait(1)
                 try:
                     WebDriverWait(self.driver, 3).until(EC.presence_of_element_located((By.CLASS_NAME, "data-header")))
+                    self.logger.info("Correct profile url")
                     return
                 except:
                     pass
             self.driver.quit()
-            raise error.URLNavigationError("Error navigating by wrong URL")
+            self.logger.exception(f"Error navigating by wrong URL: {e}")
+            raise error.URLNavigationError(f"Error navigating by wrong URL: {e}")
 
     # Scrape core info   
     def _scrape_core_info(self):
         self.core_info['name'] = self.basic_data.name = self._safe_find_element(driver = self.driver, path = ".data-header__headline-wrapper strong", type = By.CSS_SELECTOR)
         self.core_info['id'] = self.basic_data.id = self._safe_find_element(driver = self.driver, path = "div#subnavi[data-id]", attr = "data-id", type = By.CSS_SELECTOR)
         self.core_info['url'] = self.basic_data.url = self._safe_find_element(driver = self.driver, path = "//a[@class='tm-subnav-item megamenu']", attr = "href")
-
+        self.logger.info("Scraped core info")
     # SCrape basic data
     def _scrape_basic_data(self):
 
@@ -195,7 +202,7 @@ class Player(scrape):
         except: 
             self.basic_data.social_media_links = None
         # For 'social_media', assuming it might return multiple links
-          
+        self.logger.info("Scraped basic data")  
     # Get the info 
     def _safe_find_element(self, driver, path, attr=None, type=By.XPATH, path_2 = None, type_2=By.XPATH):
         """Returns the element's attribute or text safely. If element isn't found, return None."""
@@ -240,7 +247,9 @@ class Player(scrape):
         try:
             all_history = WebDriverWait(self.driver, 2).until(EC.presence_of_all_elements_located((By.CLASS_NAME, 'tm-player-transfer-history-grid')))
             all_history = all_history[1:-1]
-        except:
+            self.logger.info("Get all elments of transfer histories")
+        except Exception as e:
+            self.logger.exception(f"Can not find transfer history{e}")
             return None
         
         for one_history in all_history:
@@ -252,18 +261,24 @@ class Player(scrape):
             history.market_value = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__market-value')
             history.fee = _transfer_history._extract_history_data(one_history, 'tm-player-transfer-history-grid__fee')
             self.transfer_history.append(history)
+        self.logger.info("Scraped transfer histories")
         self.driver.quit()
+        self.logger.info("Quit driver")
         self.driver = None
 
     def get_transfer_history(self, to_dict=False):
         if not self.transfer_history:
             self._scrape_transfer_history()
+            self.logger.info("Scraped transfer history")
         if to_dict:
             history_dict_list = []
             for history in self.transfer_history:
                 history_dict_list.append(history._to_dict())
+            self.logger.info("Return transfer history in dictionary form")
             return history_dict_list
+        self.logger.info("Return transfer history")
         return self.transfer_history
+        
     
 class _basic_data:
     age = None
@@ -348,37 +363,3 @@ class _all_seasons_stats_compact:
         parts[-3] = "leistungsdatendetails"
         # Join the parts back together
         return '/'.join(parts)
-
-# Temp test entrance    
-if __name__ == '__main__':
-   
-    try:
-        messi = Player(name = "DALEI       WANG")
-        print(messi.get_core_info(True))
-        print(messi.get_core_info())
-        print(messi.get_basic_data(True,True))
-        #print(messi.basic_data.image_url)
-        #print(messi.basic_data.position_other)
-        #desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-        #csv_file = os.path.join(desktop_path, "tmarket_output.csv")
-        #messi.get_basic_data_df_available().to_csv(csv_file, index=False)
-        start_time = time.time()
-        for i in messi.get_transfer_history(True):
-            print(i) 
-        print("--- %s seconds ---" % (time.time() - start_time))
-        for i in messi.get_transfer_history():
-            print(i) 
-        print("--- %s seconds ---" % (time.time() - start_time))
-        #print(messi.get_transfer_history()[0].left)
-        print(messi.basic_data.status)
-        a = _all_seasons_stats_compact()
-        print(a._provide_url_by_main_url(url=messi.basic_data.url))
-    except Exception as e:
-            print(f"Error: {e}")
-    finally:
-        try:
-            messi._save_log_copy("/Users/haotianyang/desktop")
-            messi.driver.quit()
-        except: pass
-    
-    
