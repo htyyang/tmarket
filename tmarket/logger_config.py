@@ -16,3 +16,10 @@ def get_logger(module_name):
     except:
         raise error.LoggerError.LoggerCreateError(f"Failed to create logger for {module_name}")
     
+def clear_log_file():
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs/tmarket.log'),'w') as log_file:
+            pass
+    except Exception as e:
+        raise error.LoggerError.LoggerClearError(e)
+    
