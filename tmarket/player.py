@@ -1,6 +1,6 @@
 # Standard library imports
-import time
 import re
+import time
 # Third-party library imports
 import pandas as pd
 from selenium import webdriver
@@ -10,7 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchElementException, InvalidSelectorException, TimeoutException
-
+from bs4 import BeautifulSoup
 
 # Relative imports
 from .scrape import scrape
@@ -278,8 +278,39 @@ class Player(scrape):
             return history_dict_list
         self.logger.info("Return transfer history")
         return self.transfer_history
-        
+
+    def get_all_seasons_stats_compact(self, to_dict=False):
+        if not self.all_seasons_stats_compact:
+            self._scrape_all_seasons_stats_compact()
+            self.logger.info("Scraped all seasons stats compact")
+        if to_dict:
+            stats_dict_list = []
+            for stats in self.all_seasons_stats_compact:
+                stats_dict_list.append(stats._to_dict())
+            self.logger.info("Return all seasons stats compact in dictionary form")
+            return stats_dict_list
+        self.logger.info("Return all seasons stats compact")
+        return self.all_seasons_stats_compact
     
+    def _scrape_all_seasons_stats_compact(self):
+        self._start_driver()
+        self.driver.get(_all_seasons_stats_compact._provide_url_by_main_url(self.core_info['url']))
+        html = self.driver.page_source
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table', class_='items')
+        # Ensure that the table was found before proceeding.
+        if table:
+            # Extract the tbody from the table
+            tbody = table.find('tbody')
+            if tbody:
+            # Loop through each tr within the tbody
+                for tr in tbody.find_all('tr'):
+                    # Do whatever you want with each 'tr'
+                    single_season_stats_compact = _all_seasons_stats_compact._get_single_season_stats_compact(tr)
+                    self.all_seasons_stats_compact.append(single_season_stats_compact)
+        else:
+            self.all_seasons_stats_compact.append(None)
+        self.driver.quit()
 class _basic_data:
     age = None
     agent_name = None
@@ -349,13 +380,28 @@ class _transfer_history:
 class _all_seasons_stats_compact:
     season = None
     competetion = None
-    club = None
+    team = None
     game_num = None
     goal = None
-    penalty = None
+    assists = None
     cards = None
     minutes = None
-    def _provide_url_by_main_url(self, url):
+
+    def __str__(self):
+        return (f"season: {self.season}\n"
+                f"competetion: {self.competetion}\n"
+                f"team: {self.team}\n"
+                f"game_num: {self.game_num}\n"
+                f"goal: {self.goal}\n"
+                f"assists: {self.assists}\n"
+                f"cards: {self.cards}\n"
+                f"minutes: {self.minutes}")
+    
+    def _to_dict(self):
+        return {attr: getattr(self, attr) for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")}
+    
+    @staticmethod
+    def _provide_url_by_main_url(url):
         parts = url.split('/')
         # Check if the URL is in the expected format
         if len(parts) < 5 or parts[-3] != "profil":
@@ -363,3 +409,66 @@ class _all_seasons_stats_compact:
         parts[-3] = "leistungsdatendetails"
         # Join the parts back together
         return '/'.join(parts)
+    
+    @staticmethod
+    def _get_single_season_stats_compact(tr):
+        single_season = _all_seasons_stats_compact()
+        single_season.season = tr.find('td', class_='zentriert').text
+        competition_img = tr.find('td', class_='hauptlink no-border-rechts').find('img')
+        single_season.competetion = competition_img['title'] if competition_img else None
+        team_img = tr.find('td', class_='hauptlink no-border-rechts zentriert').find('img')
+        single_season.team = team_img['title'] if team_img else None
+        single_season.game_num = tr.find_all('td', class_='zentriert')[2].text
+        single_season.game_num = _all_seasons_stats_compact._replace_with_num(single_season.game_num)
+        single_season.goal = tr.find_all('td', class_='zentriert')[3].text
+        single_season.goal = _all_seasons_stats_compact._replace_with_num(single_season.goal)
+        single_season.assists = tr.find_all('td', class_='zentriert')[4].text
+        single_season.assists = _all_seasons_stats_compact._replace_with_num(single_season.assists)
+        data_string = tr.find_all('td', class_='zentriert')[5].text
+        data_values = [int(x.strip()) if x.strip().isdigit() else 0 for x in data_string.split('/')]
+        single_season.cards = {'yellow cards': data_values[0], 'second yellow cards': data_values[1], 'red cards': data_values[2]}
+        # Ensure there are 3 values by padding with Nones if necessary
+        single_season.minutes = tr.find('td', class_='rechts').text
+        single_season.minutes=_all_seasons_stats_compact._replace_with_minutes(single_season.minutes)
+        return single_season
+
+    @staticmethod
+    def _replace_with_num(string):
+        if string:
+            if string == "-":
+                return "0"
+            return int(string)
+        return None
+    
+    @staticmethod
+    def _replace_with_minutes(string):
+        if string:
+            if string == "-":
+                return 0
+            else:
+                string = string.replace("'", "")
+                string = string.replace(".", "")
+            return int(string)
+        return None
+
+if __name__ == '__main__':
+    try:
+            start_time = time.time()
+            clear_log_file()
+            messi = Player(url = "https://www.transfermarkt.com/lionel-messi/profil/spieler/28003")
+            print("--- %s seconds ---" % (time.time() - start_time))
+            print(messi.get_core_info())
+            print(messi.get_basic_data(True,True))
+            start_time = time.time()
+            a = messi.get_all_seasons_stats_compact(True)
+            
+            for data_compact in a:
+                print(data_compact)
+            print("--- %s seconds ---" % (time.time() - start_time))
+    except Exception as e:
+                print(f"Error: {e}")
+    finally:
+            try:
+                messi._save_log_copy("/Users/haotianyang/desktop")
+                messi.driver.quit()
+            except: pass
