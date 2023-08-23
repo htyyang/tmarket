@@ -450,25 +450,3 @@ class _all_seasons_stats_compact:
                 string = string.replace(".", "")
             return int(string)
         return None
-
-if __name__ == '__main__':
-    try:
-            start_time = time.time()
-            clear_log_file()
-            messi = Player(url = "https://www.transfermarkt.com/lionel-messi/profil/spieler/28003")
-            print("--- %s seconds ---" % (time.time() - start_time))
-            print(messi.get_core_info())
-            print(messi.get_basic_data(True,True))
-            start_time = time.time()
-            a = messi.get_all_seasons_stats_compact(True)
-            
-            for data_compact in a:
-                print(data_compact)
-            print("--- %s seconds ---" % (time.time() - start_time))
-    except Exception as e:
-                print(f"Error: {e}")
-    finally:
-            try:
-                messi._save_log_copy("/Users/haotianyang/desktop")
-                messi.driver.quit()
-            except: pass
